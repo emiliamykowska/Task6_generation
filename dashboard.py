@@ -3,15 +3,21 @@ import streamlit as st
 import pandas as pd
 
 
+@st.cache_resource
+def get_db_connection():
+    return mysql.connector.connect(
+        username=st.secrets["username"],
+        password=st.secrets["password"],
+        host=st.secrets["host"],
+        database=st.secrets["database"],
+        port=st.secrets["port"],
+    )
+
+
 def on_generate():
     st.session_state.batch_index = 0
     st.session_state.disabled = False
 
-
-username = st.secrets["username"]
-password = st.secrets["password"]
-host = st.secrets["host"]
-database = st.secrets["database"]
 
 locales = ("DEU", "USA")
 batch_size = 10
@@ -61,19 +67,18 @@ if generate_clicked or next_batch_clicked:
         batch_size,
     )
 
-    with mysql.connector.connect(
-        user=username, password=password, host=host, database=database
-    ) as cnx:
-        cursor = cnx.cursor()
+    cnx = get_db_connection()
 
-        cursor.callproc("GenerateUserBatch", args)
+    cursor = cnx.cursor()
 
-        for result in cursor.stored_results():
-            columns = [col[0] for col in result.description]
-            rows = result.fetchall()
-            st.session_state.rows = pd.DataFrame(rows, columns=columns)
+    cursor.callproc("GenerateUserBatch", args)
 
-        cursor.close()
+    for result in cursor.stored_results():
+        columns = [col[0] for col in result.description]
+        rows = result.fetchall()
+        st.session_state.rows = pd.DataFrame(rows, columns=columns)
+
+    cursor.close()
 
 if not st.session_state.rows.empty:
     st.subheader(
